@@ -1,0 +1,5 @@
+src/platform/nrf52/softdevice/ble_gap.h:1658: * @note The LE ping procedure will be initiated before the timer expires to give the peer a chance
+src/platform/nrf52/softdevice/ble_gap.h:1659: *       to reset the timer. In addition the stack will try to prioritize running of LE ping over other
+src/platform/nrf52/softdevice/ble_gap.h:1660: *       activities to increase chances of finishing LE ping before timer expires. To avoid side-effects
+src/platform/nrf52/softdevice/nrf_sdm.h:247:    uint8_t rc_ctiv;      /**< Only for ::NRF_CLOCK_LF_SRC_RC: Calibration timer interval in 1/4 second
+src/platform/nrf52/softdevice/nrf_sdm.h:250:                                     maximum temperature change allowed in one calibration timer

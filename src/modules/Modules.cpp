@@ -9,7 +9,9 @@
 #include "input/UpDownInterruptImpl1.h"
 #include "input/cardKbI2cImpl.h"
 #include "input/kbMatrixImpl.h"
-#endif
+#include "modules/DemoMod.h"
+#include "modules/ReplyModule.h"
+#endif 
 #if !MESHTASTIC_EXCLUDE_ADMIN
 #include "modules/AdminModule.h"
 #endif
@@ -81,7 +83,7 @@
 #if !MESHTASTIC_EXCLUDE_RANGETEST && !MESHTASTIC_EXCLUDE_GPS
 #include "modules/RangeTestModule.h"
 #endif
-#if !defined(CONFIG_IDF_TARGET_ESP32S2) && !MESHTASTIC_EXCLUDE_SERIAL
+#if !defined(CONFIG_IDF_TARGET_ESP32S2) && !MESHTASTIC_EXCLUDE_SERIAL 
 #include "modules/SerialModule.h"
 #endif
 #endif
@@ -106,6 +108,7 @@ void setupModules()
         nodeInfoModule = new NodeInfoModule();
 #endif
 #if !MESHTASTIC_EXCLUDE_GPS
+        LOG_DEBUG("Position Module Init");
         positionModule = new PositionModule();
 #endif
 #if !MESHTASTIC_EXCLUDE_WAYPOINT
@@ -139,8 +142,12 @@ void setupModules()
 #if !MESHTASTIC_EXCLUDE_POWERSTRESS
         new PowerStressModule();
 #endif
-        // Example: Put your module here
-        // new ReplyModule();
+
+// Example: Put your module here
+//new DemoModule();
+LOG_DEBUG("Before ReplyModule");
+new ReplyModule();
+
 #if (HAS_BUTTON || ARCH_PORTDUINO) && !MESHTASTIC_EXCLUDE_INPUTBROKER
         rotaryEncoderInterruptImpl1 = new RotaryEncoderInterruptImpl1();
         if (!rotaryEncoderInterruptImpl1->init()) {
@@ -241,6 +248,9 @@ void setupModules()
 #if !MESHTASTIC_EXCLUDE_TRACEROUTE
         traceRouteModule = new TraceRouteModule();
 #endif
+
+
+
     }
     // NOTE! This module must be added LAST because it likes to check for replies from other modules and avoid sending extra
     // acks

@@ -8,11 +8,9 @@
 
 ## Overview
 
-This repository contains the device firmware for the Meshtastic project.
+Personal Project based on expanding Meshtastic to support other transmission mediums. WIP.
 
 - **[Building Instructions](https://meshtastic.org/docs/development/firmware/build)**
 - **[Flashing Instructions](https://meshtastic.org/docs/getting-started/flashing-firmware/)**
 
-## Stats
 
-![Alt](https://repobeats.axiom.co/api/embed/a92f097d9197ae853e780ec53d7d126e545629ab.svg "Repobeats analytics image")
