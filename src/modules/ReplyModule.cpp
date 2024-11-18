@@ -5,6 +5,8 @@
 
 #include <assert.h>
 
+ReplyModule *replymod;
+
 meshtastic_MeshPacket *ReplyModule::allocReply()
 {
     LOG_DEBUG("I'm ReplyModule!!");

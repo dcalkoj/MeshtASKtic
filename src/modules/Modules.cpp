@@ -146,7 +146,8 @@ void setupModules()
 // Example: Put your module here
 //new DemoModule();
 LOG_DEBUG("Before ReplyModule");
-new ReplyModule();
+replymod = new ReplyModule();
+assert(replymod);
 
 #if (HAS_BUTTON || ARCH_PORTDUINO) && !MESHTASTIC_EXCLUDE_INPUTBROKER
         rotaryEncoderInterruptImpl1 = new RotaryEncoderInterruptImpl1();

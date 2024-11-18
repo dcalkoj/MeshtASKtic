@@ -4,6 +4,8 @@
 /**
  * A simple example module that just replies with "Message received" to any message it receives.
  */
+
+
 class ReplyModule : public SinglePortModule
 {
   public:
@@ -18,3 +20,5 @@ class ReplyModule : public SinglePortModule
      */
     virtual meshtastic_MeshPacket *allocReply() override;
 };
+
+extern ReplyModule *replymod;
