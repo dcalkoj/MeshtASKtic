@@ -29,7 +29,8 @@ class Router : protected concurrency::OSThread
     Router();
 
     /**
-     * Currently we only allow one interface, that may change in the future
+     * Currently we only allow
+     * one interface, that may change in the future
      */
     void addInterface(RadioInterface *_iface) { iface = _iface; }
 

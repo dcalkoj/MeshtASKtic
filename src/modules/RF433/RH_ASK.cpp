@@ -119,27 +119,27 @@ void RH_ASK::timerSetup()
 {
     #if (RH_PLATFORM == RH_PLATFORM_RAK4630)
         // Set up Timer 1 for nRF52840 on RAK4631
-        NRF_TIMER1->MODE = TIMER_MODE_MODE_Timer;  // Set the timer in Timer Mode
-        NRF_TIMER1->BITMODE = TIMER_BITMODE_BITMODE_16Bit; // 16-bit mode
+        NRF_TIMER2->MODE = TIMER_MODE_MODE_Timer;  // Set the timer in Timer Mode
+        NRF_TIMER2->BITMODE = TIMER_BITMODE_BITMODE_16Bit; // 16-bit mode
 
         // Calculate the required timer frequency
         uint32_t timer_freq = (16000000 / 8) / _speed; // Assuming 16 MHz HFCLK
 
-        NRF_TIMER1->PRESCALER = 0;  // Prescaler, 0 for 1:1
-        NRF_TIMER1->CC[0] = timer_freq;
+        NRF_TIMER2->PRESCALER = 0;  // Prescaler, 0 for 1:1
+        NRF_TIMER2->CC[0] = timer_freq;
 
         // Enable interrupt for COMPARE[0] event
-        NRF_TIMER1->INTENSET = TIMER_INTENSET_COMPARE0_Enabled << TIMER_INTENSET_COMPARE0_Pos;
+        NRF_TIMER2->INTENSET = TIMER_INTENSET_COMPARE0_Enabled << TIMER_INTENSET_COMPARE0_Pos;
 
         // Clear event
-        NRF_TIMER1->EVENTS_COMPARE[0] = 0;
+        NRF_TIMER2->EVENTS_COMPARE[0] = 0;
 
         // Enable IRQ in the NVIC
         NVIC_SetPriority(TIMER1_IRQn, 3);
         NVIC_EnableIRQ(TIMER1_IRQn);
 
         // Start Timer
-        NRF_TIMER1->TASKS_START = 1;
+        NRF_TIMER2->TASKS_START = 1;
     #else
         exit(0); //Undefined!
 
@@ -297,31 +297,13 @@ bool RH_INTERRUPT_ATTR RH_ASK::readRx()
 // Write the TX output pin, taking into account platform type.
 void RH_INTERRUPT_ATTR RH_ASK::writeTx(bool value)
 {
-#if (RH_PLATFORM == RH_PLATFORM_GENERIC_AVR8)
-    ((value) ? (RH_ASK_TX_PORT |= (1<<RH_ASK_TX_PIN)) : (RH_ASK_TX_PORT &= ~(1<<RH_ASK_TX_PIN)));
-// No longer relevant: PinStatus onlty used in old versions
-//#elif (RH_PLATFORM == RH_PLATFORM_ATTINY_MEGA)
-//    digitalWrite(_txPin, (PinStatus)value);
-#else
     digitalWrite(_txPin, value);
-#endif
 }
 
 // Write the PTT output pin, taking into account platform type and inversion.
 void RH_INTERRUPT_ATTR RH_ASK::writePtt(bool value)
 {
-#if (RH_PLATFORM == RH_PLATFORM_GENERIC_AVR8)
- #if RH_ASK_PTT_PIN 
-    ((value) ? (RH_ASK_PTT_PORT |= (1<<RH_ASK_PTT_PIN)) : (RH_ASK_PTT_PORT &= ~(1<<RH_ASK_PTT_PIN)));
- #else
-    ((value) ? (RH_ASK_TX_PORT |= (1<<RH_ASK_TX_PIN)) : (RH_ASK_TX_PORT &= ~(1<<RH_ASK_TX_PIN)));
- #endif
-// This no longer relevant: ater version use uint8_t
-//#elif (RH_PLATFORM == RH_PLATFORM_ATTINY_MEGA)
-//    digitalWrite(_txPin, (PinStatus)(value ^ _pttInverted));
-#else
     digitalWrite(_pttPin, value ^ _pttInverted);
-#endif
 }
 
 uint8_t RH_ASK::maxMessageLength()
@@ -329,161 +311,27 @@ uint8_t RH_ASK::maxMessageLength()
     return RH_ASK_MAX_MESSAGE_LEN;
 }
 
-#if (RH_PLATFORM == RH_PLATFORM_ARDUINO) 
- // Assume Arduino Uno (328p or similar)
- #if defined(RH_ASK_ARDUINO_USE_TIMER2)
-  #define RH_ASK_TIMER_VECTOR TIMER2_COMPA_vect
- #else
-  #define RH_ASK_TIMER_VECTOR TIMER1_COMPA_vect
- #endif
-#elif (RH_PLATFORM == RH_PLATFORM_ATTINY)
-#if defined(RH_ASK_ATTINY_USE_TIMER1)
-  #define RH_ASK_TIMER_VECTOR TIM1_COMPA_vect
- #else 
-  #define RH_ASK_TIMER_VECTOR TIM0_COMPA_vect
- #endif //RH_ASK_ATTINY_USE_TIMER1
-#elif (RH_PLATFORM == RH_PLATFORM_GENERIC_AVR8)
- #define __COMB(a,b,c) (a##b##c)
- #define _COMB(a,b,c) __COMB(a,b,c)
- #define RH_ASK_TIMER_VECTOR _COMB(TIMER,RH_ASK_TIMER_INDEX,_COMPA_vect)
-#endif
-
-#if (RH_PLATFORM == RH_PLATFORM_ARDUINO) && defined(__arm__) && defined(CORE_TEENSY)	
-void TIMER1_COMPA_vect(void)
-{
-    thisASKDriver->handleTimerInterrupt();
-}
-
-#elif (RH_PLATFORM == RH_PLATFORM_ARDUINO) && defined (__arm__) && defined(ARDUINO_ARCH_SAMD)
-// Arduino Zero
-void TC3_Handler()
-{
-    // The type cast must fit with the selected timer mode
-    TcCount16* TC = (TcCount16*)RH_ASK_ZERO_TIMER; // get timer struct
-    TC->INTFLAG.bit.MC0 = 1;
-    thisASKDriver->handleTimerInterrupt();
-}
-
-#elif (RH_PLATFORM == RH_PLATFORM_ARDUINO) && defined(__arm__) && defined(ARDUINO_SAM_DUE)
-// Arduino Due
-void TC1_Handler()
-{
-    TC_GetStatus(RH_ASK_DUE_TIMER, 1);
-    thisASKDriver->handleTimerInterrupt();
-}
-
-#elif (RH_PLATFORM == RH_PLATFORM_ARDUINO) && defined(ARDUINO_ARCH_RP2040)
-void picoInterrupt()
-{
-    hw_clear_bits(&timer_hw->intr, 1u << RH_ASK_PICO_ALARM_NUM);
-    set_pico_alarm(thisASKDriver->speed());
-    thisASKDriver->handleTimerInterrupt();
-}
-
-#elif defined(BOARD_NAME)
-// ST's Arduino Core STM32, https://github.com/stm32duino/Arduino_Core_STM32
-// Declaration of the callback function changed in 1.9
- #if (STM32_CORE_VERSION >= 0x01090000)
-// This really should be callback_function_t interrupt() but some platform compilers
-// warn/error, thinking there should be a return value
-void interrupt()
- #else
-void interrupt(HardwareTimer*)
- #endif
-{
-    thisASKDriver->handleTimerInterrupt();
-}
-#elif (RH_PLATFORM == RH_PLATFORM_ARDUINO) && (defined(ARDUINO_ARCH_STM32) || defined(ARDUINO_ARCH_STM32F1) || defined(ARDUINO_ARCH_STM32F3) || defined(ARDUINO_ARCH_STM32F4) || defined(ARDUINO_ARCH_RP2040))
-// Roger Clark Arduino STM32, https://github.com/rogerclarkmelbourne/Arduino_STM32
-void interrupt()
-{
-    thisASKDriver->handleTimerInterrupt();
-}
-
-#elif (true)
+#if (RH_PLATFORM == RH_PLATFORM_RAK4630)
 extern "C" void TIMER1_IRQHandler(void) 
 {
     // Check if the timer compare event occurred
-    if (NRF_TIMER1->EVENTS_COMPARE[0])
+    if (NRF_TIMER2->EVENTS_COMPARE[0])
     {
         // Clear the event
-        NRF_TIMER1->EVENTS_COMPARE[0] = 0;
-        NRF_TIMER1->TASKS_CLEAR = 1;
+        NRF_TIMER2->EVENTS_COMPARE[0] = 0;
+        NRF_TIMER2->TASKS_CLEAR = 1;
 
         // Call the interrupt handling function in the driver
         thisASKDriver->handleTimerInterrupt();
     }
 }
 
-#elif (RH_PLATFORM == RH_PLATFORM_ARDUINO) || (RH_PLATFORM == RH_PLATFORM_GENERIC_AVR8) || (RH_PLATFORM == RH_PLATFORM_ATTINY)
-// This is the interrupt service routine called when timer1 overflows
-// Its job is to output the next bit from the transmitter (every 8 calls)
-// and to call the PLL code if the receiver is enabled
-//ISR(SIG_OUTPUT_COMPARE1A)
-ISR(RH_ASK_TIMER_VECTOR)
-{
-    thisASKDriver->handleTimerInterrupt();
-}
-
-#elif (RH_PLATFORM == RH_PLATFORM_MSP430) || (RH_PLATFORM == RH_PLATFORM_STM32)
-// LaunchPad, Maple
-void interrupt()
-{
-    thisASKDriver->handleTimerInterrupt();
-}
-
-#elif (RH_PLATFORM == RH_PLATFORM_STM32F2) // Photon
-void TimerInterruptHandler()
-{
-    thisASKDriver->handleTimerInterrupt();
-}
-
-#elif (RH_PLATFORM == RH_PLATFORM_MSP430) 
-interrupt(TIMER0_A0_VECTOR) Timer_A_int(void) 
-{
-    thisASKDriver->handleTimerInterrupt();
-};
-
-#elif (RH_PLATFORM == RH_PLATFORM_CHIPKIT_CORE)
-// Using ChipKIT Core on Arduino IDE
-uint32_t chipkit_timer_interrupt_handler(uint32_t currentTime) 
-{
-    thisASKDriver->handleTimerInterrupt();
-    return (currentTime + ((CORE_TICK_RATE * 1000)/8)/thisASKDriver->speed());
-}
-
-#elif (RH_PLATFORM == RH_PLATFORM_UNO32)
-// Under old MPIDE, which has been discontinued:
-extern "C"
-{
- void __ISR(_TIMER_1_VECTOR, ipl1) timerInterrupt(void)
- {
-    thisASKDriver->handleTimerInterrupt();
-    mT1ClearIntFlag(); // Clear timer 1 interrupt flag
-}
-}
-#elif (RH_PLATFORM == RH_PLATFORM_ESP8266)
-void RH_INTERRUPT_ATTR esp8266_timer_interrupt_handler()
-{  
-//    timer0_write(ESP.getCycleCount() + 41660000);
-//    timer0_write(ESP.getCycleCount() + (clockCyclesPerMicrosecond() * 100) - 120 );
-    timer0_write(ESP.getCycleCount() + thisASKDriver->_timerIncrement);
-//    static int toggle = 0;
-//  toggle = (toggle == 1) ? 0 : 1;
-//  digitalWrite(4, toggle);
-    thisASKDriver->handleTimerInterrupt();
-}
 #elif (RH_PLATFORM == RH_PLATFORM_ESP32)
 void IRAM_ATTR esp32_timer_interrupt_handler()
 {
     thisASKDriver->handleTimerInterrupt();
 }
-#elif (RH_PLATFORM == RH_PLATFORM_ATTINY_MEGA)
-ISR(RH_ATTINY_MEGA_ASK_TIMER_VECTOR)
-{
-    thisASKDriver->handleTimerInterrupt();
-    RH_ATTINY_MEGA_ASK_TIMER.INTFLAGS = TCB_CAPT_bm;
-}
+
 #endif
 
 // Convert a 6 bit encoded symbol into its 4 bit decoded equivalent
