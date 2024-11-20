@@ -47,10 +47,10 @@
 
 // RH_ASK on ATtiny8x uses Timer 0 to generate interrupts 8 times per bit interval. 
 // Timer 0 is used by Arduino platform for millis()/micros() which is used by delay()
-// Uncomment the define RH_ASK_ATTINY_USE_TIMER1 bellow, if you want to use Timer 1 instead of Timer 0 on ATtiny
+// Uncomment the define RH_ASK_ATTINY_USE_TIMER2 bellow, if you want to use Timer 1 instead of Timer 0 on ATtiny
 // Timer 1 is also used by some other libraries, e.g. Servo. Alway check usage of Timer 1 before enabling this.
 //  Should be moved to header file
-//#define RH_ASK_ATTINY_USE_TIMER1
+//#define RH_ASK_ATTINY_USE_TIMER2
 
 // Interrupt handler uses this to find the most recently initialised instance of this driver
 static RH_ASK* thisASKDriver;
@@ -135,8 +135,8 @@ void RH_ASK::timerSetup()
         NRF_TIMER2->EVENTS_COMPARE[0] = 0;
 
         // Enable IRQ in the NVIC
-        NVIC_SetPriority(TIMER1_IRQn, 3);
-        NVIC_EnableIRQ(TIMER1_IRQn);
+        NVIC_SetPriority(TIMER2_IRQn, 3);
+        NVIC_EnableIRQ(TIMER2_IRQn);
 
         // Start Timer
         NRF_TIMER2->TASKS_START = 1;
@@ -312,7 +312,7 @@ uint8_t RH_ASK::maxMessageLength()
 }
 
 #if (RH_PLATFORM == RH_PLATFORM_RAK4630)
-extern "C" void TIMER1_IRQHandler(void) 
+extern "C" void TIMER2_IRQHandler(void) 
 {
     // Check if the timer compare event occurred
     if (NRF_TIMER2->EVENTS_COMPARE[0])

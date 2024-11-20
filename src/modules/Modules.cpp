@@ -9,7 +9,7 @@
 #include "input/UpDownInterruptImpl1.h"
 #include "input/cardKbI2cImpl.h"
 #include "input/kbMatrixImpl.h"
-#include "modules/RF433/RH_ASK.h"
+//#include "modules/RF433/RH_ASK.h"
 #endif 
 #if !MESHTASTIC_EXCLUDE_ADMIN
 #include "modules/AdminModule.h"
@@ -143,10 +143,10 @@ void setupModules()
 #endif
 
 // Example: Put your module here
-LOG_DEBUG("Attempting to Init RH_ASK");
+/*LOG_DEBUG("Attempting to Init RH_ASK");
 RH_ASK driver;
 if(!driver.init()) 
-        LOG_DEBUG("RH INIT FAILED!");
+        LOG_DEBUG("RH INIT FAILED!");*/
 
 #if (HAS_BUTTON || ARCH_PORTDUINO) && !MESHTASTIC_EXCLUDE_INPUTBROKER
         rotaryEncoderInterruptImpl1 = new RotaryEncoderInterruptImpl1();

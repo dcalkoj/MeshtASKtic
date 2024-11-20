@@ -57,39 +57,7 @@
 /// This is the number of 6 bit nibbles in the preamble
 #define RH_ASK_PREAMBLE_LEN 8
 
-/////////////////////////////////////////////////////////////////////
-/// \class RH_ASK RH_ASK.h <RH_ASK.h>
-/// \brief Driver to send and receive unaddressed, unreliable datagrams via inexpensive ASK (Amplitude Shift Keying) or 
-/// OOK (On Off Keying) RF transceivers.
-///
-/// The message format and software technology is based on our earlier VirtualWire library 
-/// (http://www.airspayce.com/mikem/arduino/VirtualWire), with which it is compatible.
-/// See http://www.airspayce.com/mikem/arduino/VirtualWire.pdf for more details. 
-/// VirtualWire is now obsolete and unsupported and is replaced by this library.
-///
-/// RH_ASK is a Driver for Arduino, Maple and others that provides features to send short
-/// messages, without addressing, retransmit or acknowledgment, a bit like UDP
-/// over wireless, using ASK (amplitude shift keying). Supports a number of
-/// inexpensive radio transmitters and receivers. All that is required is
-/// transmit data, receive data and (for transmitters, optionally) a PTT
-/// transmitter enable. Can also be used over various analog connections (not just a data radio), 
-/// such as the audio channel of an A/V sender, or long TTL lines.
-///
-/// It is intended to be compatible with the RF Monolithics (www.rfm.com)
-/// Virtual Wire protocol, but this has not been tested.
-///
-/// Does not use the Arduino UART. Messages are sent with a training preamble,
-/// message length and checksum. Messages are sent with 4-to-6 bit encoding
-/// for good DC balance, and a CRC checksum for message integrity.
-///
-/// But why not just use a UART connected directly to the
-/// transmitter/receiver? As discussed in the RFM documentation, ASK receivers
-/// require a burst of training pulses to synchronize the transmitter and
-/// receiver, and also requires good balance between 0s and 1s in the message
-/// stream in order to maintain the DC balance of the message. UARTs do not
-/// provide these. They work a bit with ASK wireless, but not as well as this
-/// code.
-///
+
 /// \par Theory of operation
 ///
 /// See ASH Transceiver Software Designer's Guide of 2002.08.07
@@ -180,56 +148,7 @@
 ///                                   ANT |- connect to your antenna syetem
 /// \endcode
 ///
-/// RH_ASK works with ATTiny85, using Arduino 1.0.5 and tinycore from
-/// https://code.google.com/p/arduino-tiny/downloads/detail?name=arduino-tiny-0100-0018.zip
-/// Tested with the examples ask_transmitter and ask_receiver on ATTiny85.
-/// Caution: The RAM memory requirements on an ATTiny85 are *very* tight. Even the bare bones
-/// ask_transmitter sketch barely fits in eh RAM available on the ATTiny85. Its unlikely to work on 
-/// smaller ATTinys such as the ATTiny45 etc. If you have wierd behaviour, consider
-/// reducing the size of RH_ASK_MAX_PAYLOAD_LEN to the minimum you can work with.
-/// Caution: the default internal clock speed on an ATTiny85 is 1MHz. You MUST set the internal clock speed
-/// to 8MHz. You can do this with Arduino IDE, tineycore and ArduinoISP by setting the board type to "ATtiny85@8MHz',
-/// setting theProgrammer to 'Arduino as ISP' and selecting Tools->Burn Bootloader. This does not actually burn a
-/// bootloader into the tiny, it just changes the fuses so the chip runs at 8MHz. 
-/// If you run the chip at 1MHz, you will get RK_ASK speeds 1/8th of the expected.
-///
-/// Initialise RH_ASK for ATTiny85 like this:
-/// \code
-/// // #include <SPI.h> // comment this out, not needed
-/// RH_ASK driver(2000, 4, 3); // 200bps, TX on D3 (pin 2), RX on D4 (pin 3)
-/// \endcode
-/// then:
-/// Connect D3 (pin 2) as the output to the transmitter
-/// Connect D4 (pin 3) as the input from the receiver.
-///
-/// With AtTiny x17 (such as 3217 etc) using Spencer Kondes megaTinyCore, You can initialise like this:
-/// RH_ASK driver(2000, 6, 7);
-/// which will transmit on digital pin 7 == PB4 == physical pin 12 on Attiny x17
-/// and receive on  digital pin 6 == PB5 == physical pin 11 on Attiny x17
-/// Uses Timer B1.
-///
-/// With AtTiny x16 (such as 3216 etc) using Spencer Kondes megaTinyCore, You can initialise like this:
-/// RH_ASK driver(2000, 11, 12);
-/// which will transmit on digital pin 12 == PC2 == physical pin 14 on Attiny x16
-/// and receive on  digital pin 11 == PC1 == physical pin 13 on Attiny x16
-/// Uses Timer B1.
-///
-/// With AtTiny x14 (such as 1614 etc) using Spencer Kondes megaTinyCore, You can initialise like this:
-/// RH_ASK driver(2000, 6, 7);
-/// which will transmit on digital pin 7 == PB0 == physical pin 9 on Attiny x14
-/// and receive on  digital pin 6 == PB1 == physical pin 8 on Attiny x16
-/// Uses Timer B1.
-///
-/// For testing purposes you can connect 2 Arduino RH_ASK instances directly, by
-/// connecting pin 12 of one to 11 of the other and vice versa, like this for a duplex connection:
-///
-/// \code
-/// Arduino 1         wires         Arduino 1
-///  D11-----------------------------D12
-///  D12-----------------------------D11
-///  GND-----------------------------GND
-/// \endcode
-///
+
 /// You can also connect 2 RH_ASK instances over a suitable analog
 /// transmitter/receiver, such as the audio channel of an A/V transmitter/receiver. You may need
 /// buffers at each end of the connection to convert the 0-5V digital output to a suitable analog voltage.
