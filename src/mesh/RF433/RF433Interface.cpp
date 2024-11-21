@@ -2,158 +2,194 @@
 #include "configuration.h"
 #include "error.h"
 #include "mesh/NodeDB.h"
+#include "PowerMon.h"
 
 #include "Throttle.h"
 
-//ACT I. OVERRIDE METHODS FROM SX126XINTERFACE
-template <typename T>
-RF433Interface<T>::RF433Interface(LockingArduinoHal *hal, RADIOLIB_PIN_TYPE cs, RADIOLIB_PIN_TYPE irq, RADIOLIB_PIN_TYPE rst,
-                                    RADIOLIB_PIN_TYPE busy) : RadioLibInterface(hal, cs, irq, rst, busy)
-{
-    LOG_DEBUG("RF33Interface(cs=%d, irq=%d, rst=%d, busy=%d)", cs, irq, rst, busy);   
+//ACT I. Transmit  (Reference: RadioInterface)
+RF433Interface::RF433Interface() : NotifiedWorkerThread("RF433"){
+
 }
 
-/// Initialise the Driver transport hardware and software.
-/// Make sure the Driver is properly configured before calling init().
-/// \return true if initialisation succeeded.
-template <typename T> bool RF433Interface<T>::init()
-{
-    if(!RF433Driver.init()){
-        LOG_DEBUG("RH_ASK_INIT FAILED!");
-        return false;
+bool RF433Interface::canSleep(){
+    bool res = txQueue.empty();
+    if (!res) { // only print debug messages if we are vetoing sleep
+        LOG_DEBUG("radio wait to sleep, txEmpty=%d", res);
+    }
+    return res;
+}
+
+/// Prepare hardware for sleep.  Call this _only_ for deep sleep, not needed for light sleep.
+bool RF433Interface::sleep(){
+    LOG_DEBUG("RF433 entering sleep");
+    if(canSleep()){
+        RF433Driver.setModeIdle();
     }
     return true;
 }
 
-template <typename T> bool RF433Interface<T>::reconfigure()
-{
-    return true;
+// This actually just queues a send. StartSend actually transmits.
+ErrorCode RF433Interface::send(meshtastic_MeshPacket *p){
+    printPacket("enqueuing for send", p);
+
+    LOG_DEBUG("txGood=%d,txRelay=%d,rxGood=%d,rxBad=%d", txGood, txRelay, rxGood, rxBad);
+    ErrorCode res = txQueue.enqueue(p) ? ERRNO_OK : ERRNO_UNKNOWN;
+
+    if (res != ERRNO_OK) { // we weren't able to queue it, so we must drop it to prevent leaks
+        packetPool.release(p);
+        return res;
+    }
+
+    // set (random) transmit delay to let others reconfigure their radio,
+    // to avoid collisions and implement timing-based flooding
+    // LOG_DEBUG("Set random delay before transmitting.");
+    setTransmitDelay();
+
+    return res;
 }
 
-template <typename T> void INTERRUPT_ATTR RF433Interface<T>::disableInterrupt(){
+
+bool RF433Interface::cancelSending(NodeNum from, PacketId id){
+    auto p = txQueue.remove(from, id);
+    if (p)
+        packetPool.release(p); // free the packet we just removed
+
+    bool result = (p != NULL);
+    LOG_DEBUG("cancelSending id=0x%x, removed=%d", id, result);
+    return result;
+}
+
+bool RF433Interface::init(){
+    if(!RF433Driver.init()){
+        LOG_DEBUG("RH_ASK_INIT FAILED!");
+        return false;
+    }
+return true;
+}
+
+float RF433Interface::getFreq(){
+    return 433; //duh!
+}
+
+void RF433Interface::saveFreq(float savedFreq){
+    savedFreq = 433; //duhhh!
+}
+
+//Act II. Recieve (Reference: RadioLibInterface)
+ void RF433Interface::disableInterrupt(){
     NVIC_DisableIRQ(TIMER2_IRQn);
-}
+ }
 
-template <typename T> void INTERRUPT_ATTR RF433Interface<T>::enableInterrupt(void (*)()){
+void RF433Interface::enableInterrupt(void (*)()){
     NVIC_EnableIRQ(TIMER2_IRQn);
 }
 
-template <typename T> void RF433Interface<T>::setStandby(){
-    checkNotification();
-
-    RF433Driver.setModeIdle();
-    isReceiving = false; // If we were receiving, not any more
-    activeReceiveStart = 0;
-    disableInterrupt();
-    completeSending(); // If we were sending, not anymore
-    RadioLibInterface::setStandby();
-}
-
-/**
- * Add SNR data to received messages
- */
-template <typename T> void RF433Interface<T>::addReceiveMetadata(meshtastic_MeshPacket *mp)
-{
-    //LOG_DEBUG("PacketStatus %x", lora.getPacketStatus());
-    LOG_DEBUG("addReceiveMetadata: SNR not available for ASK");
-    mp->rx_snr = 433;
-    mp->rx_rssi = 433;
-} 
-
-/** We override to turn on transmitter power as needed.
- */
-// 2Do: Enable Sendmode? DONE..verify.
-template <typename T> void RF433Interface<T>::configHardwareForSend()
-{
-    RF433Driver.setModeTx();
-    RadioLibInterface::configHardwareForSend();
+void RF433Interface::startReceive(){
+    isReceiving = true;
+    powerMon->setState(meshtastic_PowerMon_State_Lora_RXOn);
 }
 
 
-template <typename T> void RF433Interface<T>::startReceive()
-{
-#ifdef SLEEP_ONLY
-    sleep();
-#else
-    setStandby();
-
-    // We use a 16 bit preamble so this should save some power by letting radio sit in standby mostly.
-    // Furthermore, we need the PREAMBLE_DETECTED and HEADER_VALID IRQ flag to detect whether we are actively receiving
-    
-    RF433Driver.setModeRx();
-    RadioLibInterface::startReceive();
-
-    // Must be done AFTER, starting transmit, because startTransmit clears (possibly stale) interrupt pending register bits
-    enableInterrupt(isrRxLevel0);
-#endif
-}
-
-
-/** Is the channel currently active? */
-template <typename T> bool RF433Interface<T>::isChannelActive()
-{
-    // check if we can detect a LoRa preamble on the current channel
-    bool result;
-
-    setStandby();
-    result = RF433Driver.available();
-    if (result)
-        return true;
-    else
-        LOG_ERROR("RF433 scanChannel %s%d", radioLibErr, result);
-    assert(result != RADIOLIB_ERR_WRONG_MODEM);
-
-    return false;
-}
-
-/** Could we send right now (i.e. either not actively receiving or transmitting)? */
-template <typename T> bool RF433Interface<T>::isActivelyReceiving()
-{
-    // The IRQ status will be cleared when we start our read operation. Check if we've started a header, but haven't yet
-    // received and handled the interrupt for reading the packet/handling errors.
-    //return receiveDetected(lora.getIrqFlags(), RADIOLIB_SX126X_IRQ_HEADER_VALID, RADIOLIB_SX126X_IRQ_PREAMBLE_DETECTED);
+bool RF433Interface::isChannelActive(){
     return RF433Driver.available();
 }
 
-template <typename T> bool RF433Interface<T>::sleep()
-{
-    // Not keeping config is busted - next time nrf52 board boots lora sending fails  tcxo related? - see datasheet
-    // \todo Display actual typename of the adapter, not just `SX126x`
-    LOG_DEBUG("RF433 entering sleep mode"); // (FIXME, don't keep config)
-    setStandby();                            // Stop any pending operations
-
-    return true;
+bool RF433Interface::isActivelyReceiving(){
+    return RF433Driver.available();
 }
 
-//ACT II. METHODS FROM RADIOLIBINTERFACE
+/** if we have something waiting to send, start a short (random) timer so we can come check for collision before actually
+ * doing the transmit */
+void RF433Interface::setTransmitDelay(){
+    meshtastic_MeshPacket *p = txQueue.getFront();
+    if (p->rx_snr == 0 && p->rx_rssi == 0) {
+        startTransmitTimer(true);
+    } else {
+        // If there is a SNR, start a timer scaled based on that SNR.
+        LOG_DEBUG("rx_snr found. hop_limit:%d rx_snr:%f", p->hop_limit, p->rx_snr);
+        startTransmitTimerSNR(p->rx_snr);
+    }
 
-/** Could we send right now (i.e. either not actively receiving or transmitting)? */
-template <typename T> bool RF433Interface<T>::canSendImmediately()
-{
-    // We wait _if_ we are partially though receiving a packet (rather than just merely waiting for one).
-    // To do otherwise would be doubly bad because not only would we drop the packet that was on the way in,
-    // we almost certainly guarantee no one outside will like the packet we are sending.
-    bool busyTx = sendingPacket != NULL;
-    bool busyRx = isReceiving && isActivelyReceiving();
-
-    if (busyTx || busyRx) {
-        if (busyTx) {
-            LOG_WARN("Can not send yet, busyTx");
-        }
-        // If we've been trying to send the same packet more than one minute and we haven't gotten a
-        // TX IRQ from the radio, the radio is probably broken.
-        if (busyTx && !Throttle::isWithinTimespanMs(lastTxStart, 60000)) {
-            LOG_ERROR("Hardware Failure! busyTx for more than 60s");
-            RECORD_CRITICALERROR(meshtastic_CriticalErrorCode_TRANSMIT_FAILED);
-            // reboot in 5 seconds when this condition occurs.
-            rebootAtMsec = lastTxStart + 65000;
-        }
-        if (busyRx) {
-            LOG_WARN("Can not send yet, busyRx");
-        }
-        return false;
-    } else
-        return true;
 }
 
-//ACT III. OVERRIDE METHODS FROM RADIOINTERFACE
+/** random timer with certain min. and max. settings */
+void RF433Interface::startTransmitTimer(bool withDelay){
+    // If we have work to do and the timer wasn't already scheduled, schedule it now
+    if (!txQueue.empty()) {
+        uint32_t delay = !withDelay ? 1 : getTxDelayMsec();
+        // LOG_DEBUG("xmit timer %d", delay);
+        notifyLater(delay, TRANSMIT_DELAY_COMPLETED, false); // This will implicitly enable
+    }
+}
+
+/** timer scaled to SNR of to be flooded packet */
+void RF433Interface::startTransmitTimerSNR(float snr){
+     // If we have work to do and the timer wasn't already scheduled, schedule it now
+    if (!txQueue.empty()) {
+        uint32_t delay = getTxDelayMsecWeighted(snr);
+        // LOG_DEBUG("xmit timer %d", delay);
+        notifyLater(delay, TRANSMIT_DELAY_COMPLETED, false); // This will implicitly enable
+    }
+}
+
+void RF433Interface::handleTransmitInterrupt(){
+    if (sendingPacket)
+        completeSending();
+    powerMon->clearState(meshtastic_PowerMon_State_Lora_TXOn); // But our transmitter is deffinitely off now
+}
+
+//Meaty
+void RF433Interface::handleReceiveInterrupt(){
+
+}
+
+//Meaty
+void RF433Interface::onNotify(uint32_t notification){
+
+}
+
+/** start an immediate transmit
+ *  This method is  so subclasses can hook as needed, subclasses should not call directly
+ */
+//Meaty
+void RF433Interface::startSend(meshtastic_MeshPacket *txp){
+
+}
+
+meshtastic_QueueStatus RF433Interface::getQueueStatus(){
+    meshtastic_QueueStatus qs;
+
+    qs.res = qs.mesh_packet_id = 0;
+    qs.free = txQueue.getFree();
+    qs.maxlen = txQueue.getMaxLen();
+
+    return qs;
+}
+
+//Meaty
+bool RF433Interface::receiveDetected(){
+
+}
+
+//Meaty
+bool RF433Interface::canSendImmediately(){
+
+}
+
+void RF433Interface::completeSending(){
+// We are careful to clear sending packet before calling printPacket because
+    // that can take a long time
+    auto p = sendingPacket;
+    sendingPacket = NULL;
+
+    if (p) {
+        txGood++;
+        if (!isFromUs(p))
+            txRelay++;
+        printPacket("Completed sending", p);
+
+        // We are done sending that packet, release it
+        packetPool.release(p);
+        // LOG_DEBUG("Done with send");
+    }
+}

@@ -5,63 +5,88 @@
 #include "RadioHead.h"
 #include "RH_ASK.h"
 
-template <class T> class RF433Interface : public RadioLibInterface
+#include "MeshPacketQueue.h"
+#include "concurrency/NotifiedWorkerThread.h"
+
+class RF433Interface : public RadioInterface, protected concurrency::NotifiedWorkerThread
 {
     public:
-    RF433Interface(LockingArduinoHal *hal, RADIOLIB_PIN_TYPE cs, RADIOLIB_PIN_TYPE irq, RADIOLIB_PIN_TYPE rst,
-                    RADIOLIB_PIN_TYPE busy);
+    
 
-    /// Initialise the Driver transport hardware and software.
-    /// Make sure the Driver is properly configured before calling init().
-    /// \return true if initialisation succeeded.
-    //// 2DO: Call RH_ASK init function
-    virtual bool init() override;
+    RF433Interface();
 
-    /// Apply any radio provisioning changes
-    /// Make sure the Driver is properly configured before calling init().
-    /// \return true if initialisation succeeded.
-    //// 2DO: Not particularly needed for me?
-    virtual bool reconfigure() override;
+    virtual bool canSleep() override;
+
+    virtual bool wideLora() { return false; }
 
     /// Prepare hardware for sleep.  Call this _only_ for deep sleep, not needed for light sleep.
     virtual bool sleep() override;
 
-    //// 2D0: HMMMM....
-    //bool isIRQPending() override { return lora.getIrqFlags() != 0; }
+    virtual ErrorCode send(meshtastic_MeshPacket *p) override;
+
+    //Not supported: cancelling
+    virtual bool cancelSending(NodeNum from, PacketId id) override;
+
+    virtual bool init() override;
+
+    //Not supported: reconfiguring
+    virtual bool reconfigure() {return false; }
+
+    virtual float getFreq() override;
 
     protected:
     RH_ASK RF433Driver;
+    bool isReceiving = false;
 
-    /**
-     * Glue functions called from ISR land
+
+    virtual void saveFreq(float savedFreq) override;
+
+
+    //ACT II. RadioLibInterface
+    public:
+
+    static RF433Interface *instance;
+    uint32_t rxBad = 0, rxGood = 0, txGood = 0, txRelay = 0;
+
+    virtual void disableInterrupt();
+    virtual void enableInterrupt(void (*)());
+    virtual void startReceive();
+    virtual bool isChannelActive();
+    virtual bool isActivelyReceiving();
+
+    private:
+    /** if we have something waiting to send, start a short (random) timer so we can come check for collision before actually
+     * doing the transmit */
+    void setTransmitDelay();
+
+    MeshPacketQueue txQueue = MeshPacketQueue(MAX_TX_QUEUE);
+
+    /// Used as our notification from the ISR
+    enum PendingISR { ISR_NONE = 0, ISR_RX, ISR_TX, TRANSMIT_DELAY_COMPLETED };
+
+    /** random timer with certain min. and max. settings */
+    void startTransmitTimer(bool withDelay = true);
+
+    /** timer scaled to SNR of to be flooded packet */
+    void startTransmitTimerSNR(float snr);
+
+    void handleTransmitInterrupt();
+    void handleReceiveInterrupt();
+
+    static void timerCallback(void *p1, uint32_t p2);
+
+    virtual void onNotify(uint32_t notification) override;
+
+    /** start an immediate transmit
+     *  This method is virtual so subclasses can hook as needed, subclasses should not call directly
      */
-    virtual void disableInterrupt() override;
+    virtual void startSend(meshtastic_MeshPacket *txp);
 
-    /**
-     * Enable a particular ISR callback glue function
-     */
-    virtual void enableInterrupt(void (*callback)()) override;
+    meshtastic_QueueStatus getQueueStatus();
 
-    /** can we detect a LoRa preamble on the current channel? */
-    virtual bool isChannelActive() override;
+    protected:
+    bool receiveDetected();
+    virtual bool canSendImmediately();
+    void completeSending();
 
-    /** are we actively receiving a packet (only called during receiving state) */
-    virtual bool isActivelyReceiving() override;
-
-    /**
-     * Start waiting to receive a message
-     */
-    virtual void startReceive() override;
-
-    /**
-     *  We override to turn on transmitter power as needed.
-     */
-    virtual void configHardwareForSend() override;
-
-    /**
-     * Add SNR data to received messages
-     */
-    virtual void addReceiveMetadata(meshtastic_MeshPacket *mp) override;
-
-    virtual void setStandby() override;
 };
