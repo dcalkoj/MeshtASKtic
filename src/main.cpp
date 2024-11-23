@@ -77,6 +77,7 @@ NRF52Bluetooth *nrf52Bluetooth = nullptr;
 #include "SX1262Interface.h"
 #include "SX1268Interface.h"
 #include "SX1280Interface.h"
+#include "RF433/RF433Interface.h"
 #include "detect/LoRaRadioType.h"
 
 #ifdef ARCH_STM32WL
@@ -941,7 +942,7 @@ void setup()
 #endif
 
 #if defined(USE_SX1262) && !defined(ARCH_PORTDUINO) && !defined(TCXO_OPTIONAL) && RADIOLIB_EXCLUDE_SX126X != 1
-    if ((!rIf) && (config.lora.region != meshtastic_Config_LoRaConfig_RegionCode_LORA_24)) {
+    /*if ((!rIf) && (config.lora.region != meshtastic_Config_LoRaConfig_RegionCode_LORA_24)) {
         rIf = new SX1262Interface(RadioLibHAL, SX126X_CS, SX126X_DIO1, SX126X_RESET, SX126X_BUSY);
         if (!rIf->init()) {
             LOG_WARN("Failed to find SX1262 radio");
@@ -950,6 +951,17 @@ void setup()
         } else {
             LOG_INFO("SX1262 Radio init succeeded, using SX1262 radio");
             radioType = SX1262_RADIO;
+        }
+    }*/
+   if ((!rIf) && (config.lora.region != meshtastic_Config_LoRaConfig_RegionCode_LORA_24)) {
+        rIf = new RF433Interface();
+        if (!rIf->init()) {
+            LOG_WARN("Failed to init RF433 radio");
+            delete rIf;
+            rIf = NULL;
+        } else {
+            LOG_INFO("RF433 Radio init succeeded, using RF433 radio");
+            radioType = RF433_RADIO;
         }
     }
 #endif

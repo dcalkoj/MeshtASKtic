@@ -3,13 +3,22 @@
 #include "error.h"
 #include "mesh/NodeDB.h"
 #include "PowerMon.h"
+#include "main.h"
 
 #include "Throttle.h"
 
-//ACT I. Transmit  (Reference: RadioInterface)
-RF433Interface::RF433Interface() : NotifiedWorkerThread("RF433"){
+#define RATE 2000
+#define WB_IO1 34
+#define WB_IO2 17
 
+//ACT I. Transmit  (Reference: RadioInterface)
+RF433Interface::RF433Interface() : NotifiedWorkerThread("RF433_ASK_Thread"){
+    instance = this;
+    RH_ASK RF433Driver(RATE,WB_IO1,WB_IO2);
+    
 }
+
+RF433Interface *RF433Interface::instance;
 
 bool RF433Interface::canSleep(){
     bool res = txQueue.empty();
@@ -77,11 +86,11 @@ void RF433Interface::saveFreq(float savedFreq){
 
 //Act II. Recieve (Reference: RadioLibInterface)
  void RF433Interface::disableInterrupt(){
-    NVIC_DisableIRQ(TIMER2_IRQn);
+    //NVIC_DisableIRQ(TIMER2_IRQn);
  }
 
 void RF433Interface::enableInterrupt(void (*)()){
-    NVIC_EnableIRQ(TIMER2_IRQn);
+    //NVIC_EnableIRQ(TIMER2_IRQn);
 }
 
 void RF433Interface::startReceive(){
@@ -140,12 +149,78 @@ void RF433Interface::handleTransmitInterrupt(){
 
 //Meaty
 void RF433Interface::handleReceiveInterrupt(){
+    uint32_t xmitMsec;
+
+    // when this is called, we should be in receive mode - if we are not, just jump out instead of bombing. Possible Race
+    // Condition?
+    if (!isReceiving) {
+        LOG_ERROR("handleReceiveInterrupt called when not in receive mode, which shouldn't happen.");
+        return;
+    }
+
+    isReceiving = false;
+
+    uint8_t buf[RH_ASK_MAX_MESSAGE_LEN];
+    uint8_t buflen = sizeof(buf);
+
+    if(RF433Driver.recv(buf, &buflen)){
+        LOG_DEBUG("Captured Raw tx.");
+        RF433Driver.printBuffer("Got: ", buf, buflen);
+    }
+    else{
+        LOG_ERROR("ignoring received packet due to error=");
+        rxBad++;
+    }
 
 }
 
 //Meaty
 void RF433Interface::onNotify(uint32_t notification){
+    switch(notification){
+    case ISR_TX:
+        handleTransmitInterrupt();
+        startReceive();
+        // LOG_DEBUG("tx complete - starting timer");
+        startTransmitTimer();
+        break;
+    case ISR_RX:
+        handleReceiveInterrupt();
+        startReceive();
+        // LOG_DEBUG("rx complete - starting timer");
+        startTransmitTimer();
+        break;
+    case TRANSMIT_DELAY_COMPLETED:
+        LOG_DEBUG("delay done");
+        if (!txQueue.empty()) {
+            if (!canSendImmediately()) {
+                LOG_DEBUG("Currently Rx/Tx-ing: set random delay");
+                setTransmitDelay(); // currently Rx/Tx-ing: reset random delay
+            } else {
+                if (isChannelActive()) { // check if there is currently a LoRa packet on the channel
+                    LOG_DEBUG("Channel is active, try receiving first.");
+                    startReceive(); // try receiving this packet, afterwards we'll be trying to transmit again
+                    setTransmitDelay();
+                } else {
+                    // Send any outgoing packets we have ready
+                    meshtastic_MeshPacket *txp = txQueue.dequeue();
+                    assert(txp);
+                    bool isLoraTx = txp->to != NODENUM_BROADCAST_NO_LORA;
+                    startSend(txp);
 
+                    if (isLoraTx) {
+                        // Packet has been sent, count it toward our TX airtime utilization.
+                        uint32_t xmitMsec = getPacketTime(txp);
+                        airTime->logAirtime(TX_LOG, xmitMsec);
+                    }
+                }
+            }
+        } else {
+            // LOG_DEBUG("done with txqueue");
+        }
+        break;
+    default:
+        assert(0); // We expected to receive a valid notification from the ISR
+    }
 }
 
 /** start an immediate transmit
@@ -153,7 +228,38 @@ void RF433Interface::onNotify(uint32_t notification){
  */
 //Meaty
 void RF433Interface::startSend(meshtastic_MeshPacket *txp){
+    printPacket("Starting low level send", txp);
+    if (txp->to == NODENUM_BROADCAST_NO_LORA) {
+        LOG_DEBUG("Drop Tx packet because dest is broadcast no-lora");
+        packetPool.release(txp);
+    } else if (disabled || !config.lora.tx_enabled) {
+        LOG_WARN("Drop Tx packet because LoRa Tx disabled");
+        packetPool.release(txp);
+    } else {
+        powerMon->setState(meshtastic_PowerMon_State_Lora_TXOn);
 
+        size_t numbytes = beginSending(txp);
+
+        const char *msg = "Hello World!";
+
+        auto res = RF433Driver.send((uint8_t *)msg, strlen(msg));
+        RF433Driver.waitPacketSent();
+
+        //int res = iface->startTransmit((uint8_t *)&radioBuffer, numbytes);
+        if (res != RADIOLIB_ERR_NONE) {
+            LOG_ERROR("startTransmit failed, error=%d", res);
+            RECORD_CRITICALERROR(meshtastic_CriticalErrorCode_RADIO_SPI_BUG);
+
+            // This send failed, but make sure to 'complete' it properly
+            completeSending();
+            powerMon->clearState(meshtastic_PowerMon_State_Lora_TXOn); // Transmitter off now
+            startReceive(); // Restart receive mode (because startTransmit failed to put us in xmit mode)
+        }
+
+        // Must be done AFTER, starting transmit, because startTransmit clears (possibly stale) interrupt pending register
+        // bits
+        //enableInterrupt(isrTxLevel0);
+    }
 }
 
 meshtastic_QueueStatus RF433Interface::getQueueStatus(){
@@ -168,11 +274,31 @@ meshtastic_QueueStatus RF433Interface::getQueueStatus(){
 
 //Meaty
 bool RF433Interface::receiveDetected(){
-
+    return isChannelActive();
 }
 
 //Meaty
 bool RF433Interface::canSendImmediately(){
+    bool busyTx = sendingPacket != NULL;
+    bool busyRx = isReceiving && isActivelyReceiving();
+     if (busyTx || busyRx) {
+        if (busyTx) {
+            LOG_WARN("Can not send yet, busyTx");
+        }
+        // If we've been trying to send the same packet more than one minute and we haven't gotten a
+        // TX IRQ from the radio, the radio is probably broken.
+        if (busyTx && !Throttle::isWithinTimespanMs(lastTxStart, 60000)) {
+            LOG_ERROR("Hardware Failure! busyTx for more than 60s");
+            RECORD_CRITICALERROR(meshtastic_CriticalErrorCode_TRANSMIT_FAILED);
+            // reboot in 5 seconds when this condition occurs.
+            rebootAtMsec = lastTxStart + 65000;
+        }
+        if (busyRx) {
+            LOG_WARN("Can not send yet, busyRx");
+        }
+        return false;
+    } else
+        return true;
 
 }
 

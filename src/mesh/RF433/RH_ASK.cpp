@@ -40,17 +40,17 @@
 #endif
 
 // RH_ASK on Arduino uses Timer 1 to generate interrupts 8 times per bit interval
-// Define RH_ASK_ARDUINO_USE_TIMER2 if you want to use Timer 2 instead of Timer 1 on Arduino
+// Define RH_ASK_ARDUINO_USE_TIMER3 if you want to use Timer 2 instead of Timer 1 on Arduino
 // You may need this to work around other libraries that insist on using timer 1
 // Should be moved to header file
-//#define RH_ASK_ARDUINO_USE_TIMER2
+//#define RH_ASK_ARDUINO_USE_TIMER3
 
 // RH_ASK on ATtiny8x uses Timer 0 to generate interrupts 8 times per bit interval. 
 // Timer 0 is used by Arduino platform for millis()/micros() which is used by delay()
-// Uncomment the define RH_ASK_ATTINY_USE_TIMER2 bellow, if you want to use Timer 1 instead of Timer 0 on ATtiny
+// Uncomment the define RH_ASK_ATTINY_USE_TIMER3 bellow, if you want to use Timer 1 instead of Timer 0 on ATtiny
 // Timer 1 is also used by some other libraries, e.g. Servo. Alway check usage of Timer 1 before enabling this.
 //  Should be moved to header file
-//#define RH_ASK_ATTINY_USE_TIMER2
+//#define RH_ASK_ATTINY_USE_TIMER3
 
 // Interrupt handler uses this to find the most recently initialised instance of this driver
 static RH_ASK* thisASKDriver;
@@ -75,7 +75,7 @@ RH_ASK::RH_ASK(uint16_t speed, uint8_t rxPin, uint8_t txPin, uint8_t pttPin, boo
     _txPin(txPin),
     _pttPin(pttPin),
     _rxInverted(false),
-    _pttInverted(pttInverted)
+    _pttInverted(pttInverted), concurrency::OSThread("RH_ASKThread")
 {
     // Initialise the first 8 nibbles of the tx buffer to be the standard
     // preamble. We will append messages after that. 0x38, 0x2c is the start symbol before
@@ -118,28 +118,28 @@ bool RH_ASK::init()
 void RH_ASK::timerSetup()
 {
     #if (RH_PLATFORM == RH_PLATFORM_RAK4630)
-        // Set up Timer 1 for nRF52840 on RAK4631
-        NRF_TIMER2->MODE = TIMER_MODE_MODE_Timer;  // Set the timer in Timer Mode
-        NRF_TIMER2->BITMODE = TIMER_BITMODE_BITMODE_16Bit; // 16-bit mode
+        // Set up Timer 3 for nRF52840 on RAK4631
+        NRF_TIMER3->MODE = TIMER_MODE_MODE_Timer;  // Set the timer in Timer Mode
+        NRF_TIMER3->BITMODE = TIMER_BITMODE_BITMODE_16Bit; // 16-bit mode
 
         // Calculate the required timer frequency
         uint32_t timer_freq = (16000000 / 8) / _speed; // Assuming 16 MHz HFCLK
 
-        NRF_TIMER2->PRESCALER = 0;  // Prescaler, 0 for 1:1
-        NRF_TIMER2->CC[0] = timer_freq;
+        NRF_TIMER3->PRESCALER = 0;  // Prescaler, 0 for 1:1
+        NRF_TIMER3->CC[0] = timer_freq;
 
         // Enable interrupt for COMPARE[0] event
-        NRF_TIMER2->INTENSET = TIMER_INTENSET_COMPARE0_Enabled << TIMER_INTENSET_COMPARE0_Pos;
+        NRF_TIMER3->INTENSET = TIMER_INTENSET_COMPARE0_Enabled << TIMER_INTENSET_COMPARE0_Pos;
 
         // Clear event
-        NRF_TIMER2->EVENTS_COMPARE[0] = 0;
+        NRF_TIMER3->EVENTS_COMPARE[0] = 0;
 
         // Enable IRQ in the NVIC
-        NVIC_SetPriority(TIMER2_IRQn, 3);
-        NVIC_EnableIRQ(TIMER2_IRQn);
+        NVIC_SetPriority(TIMER3_IRQn, 3);
+        //NVIC_EnableIRQ(TIMER3_IRQn); // what to do...
 
         // Start Timer
-        NRF_TIMER2->TASKS_START = 1;
+        NRF_TIMER3->TASKS_START = 1;
     #else
         exit(0); //Undefined!
 
@@ -312,18 +312,30 @@ uint8_t RH_ASK::maxMessageLength()
 }
 
 #if (RH_PLATFORM == RH_PLATFORM_RAK4630)
-extern "C" void TIMER2_IRQHandler(void) 
+/*extern "C" void TIMER3_IRQHandler(void) 
 {
     // Check if the timer compare event occurred
-    if (NRF_TIMER2->EVENTS_COMPARE[0])
+    if (NRF_TIMER3->EVENTS_COMPARE[0])
     {
         // Clear the event
-        NRF_TIMER2->EVENTS_COMPARE[0] = 0;
-        NRF_TIMER2->TASKS_CLEAR = 1;
+        NRF_TIMER3->EVENTS_COMPARE[0] = 0;
+        NRF_TIMER3->TASKS_CLEAR = 1;
 
         // Call the interrupt handling function in the driver
         thisASKDriver->handleTimerInterrupt();
     }
+}*/
+
+int32_t RH_ASK::runOnce(){
+    if (NRF_TIMER3->EVENTS_COMPARE[0]){
+        // Clear the event
+        NRF_TIMER3->EVENTS_COMPARE[0] = 0;
+        NRF_TIMER3->TASKS_CLEAR = 1;
+
+        // Call the interrupt handling function in the driver
+        thisASKDriver->handleTimerInterrupt();
+    }
+    return 1;
 }
 
 #elif (RH_PLATFORM == RH_PLATFORM_ESP32)

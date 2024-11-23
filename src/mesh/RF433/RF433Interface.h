@@ -35,8 +35,10 @@ class RF433Interface : public RadioInterface, protected concurrency::NotifiedWor
     virtual float getFreq() override;
 
     protected:
+
     RH_ASK RF433Driver;
     bool isReceiving = false;
+    RadioBuffer radioBuffer __attribute__((__aligned__));
 
 
     virtual void saveFreq(float savedFreq) override;
@@ -46,6 +48,7 @@ class RF433Interface : public RadioInterface, protected concurrency::NotifiedWor
     public:
 
     static RF433Interface *instance;
+
     uint32_t rxBad = 0, rxGood = 0, txGood = 0, txRelay = 0;
 
     virtual void disableInterrupt();
