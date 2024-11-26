@@ -333,7 +333,7 @@ int32_t RH_ASK::runOnce(){
         NRF_TIMER3->TASKS_CLEAR = 1;
 
         // Call the interrupt handling function in the driver
-        thisASKDriver->handleTimerInterrupt();
+        thisASKDriver->handleTimerInterrupt(); //not actually an interrupt
     }
     return 1;
 }

@@ -195,7 +195,7 @@ if(!driver.init())
         cannedMessageModule = new CannedMessageModule();
 #endif
 #if HAS_TELEMETRY
-        new DeviceTelemetryModule();
+        //new DeviceTelemetryModule();
 #endif
 #if HAS_SENSOR && !MESHTASTIC_EXCLUDE_ENVIRONMENTAL_SENSOR
         new EnvironmentTelemetryModule();

@@ -43,13 +43,20 @@ class RF433Interface : public RadioInterface, protected concurrency::NotifiedWor
 
     virtual void saveFreq(float savedFreq) override;
 
-
-    //ACT II. RadioLibInterface
     public:
-
+    uint32_t rxBad = 0, rxGood = 0, txGood = 0, txRelay = 0;
+    MeshPacketQueue txQueue = MeshPacketQueue(MAX_TX_QUEUE);
     static RF433Interface *instance;
 
-    uint32_t rxBad = 0, rxGood = 0, txGood = 0, txRelay = 0;
+    private:
+    virtual void onNotify(uint32_t notification) override;
+
+    //ACT II. RadioLibInterface
+    /*public:
+
+    
+
+    
 
     virtual void disableInterrupt();
     virtual void enableInterrupt(void (*)());
@@ -58,19 +65,17 @@ class RF433Interface : public RadioInterface, protected concurrency::NotifiedWor
     virtual bool isActivelyReceiving();
 
     private:
-    /** if we have something waiting to send, start a short (random) timer so we can come check for collision before actually
-     * doing the transmit */
     void setTransmitDelay();
 
-    MeshPacketQueue txQueue = MeshPacketQueue(MAX_TX_QUEUE);
+    
 
     /// Used as our notification from the ISR
     enum PendingISR { ISR_NONE = 0, ISR_RX, ISR_TX, TRANSMIT_DELAY_COMPLETED };
 
-    /** random timer with certain min. and max. settings */
+
     void startTransmitTimer(bool withDelay = true);
 
-    /** timer scaled to SNR of to be flooded packet */
+
     void startTransmitTimerSNR(float snr);
 
     void handleTransmitInterrupt();
@@ -80,9 +85,7 @@ class RF433Interface : public RadioInterface, protected concurrency::NotifiedWor
 
     virtual void onNotify(uint32_t notification) override;
 
-    /** start an immediate transmit
-     *  This method is virtual so subclasses can hook as needed, subclasses should not call directly
-     */
+
     virtual void startSend(meshtastic_MeshPacket *txp);
 
     meshtastic_QueueStatus getQueueStatus();
@@ -90,6 +93,6 @@ class RF433Interface : public RadioInterface, protected concurrency::NotifiedWor
     protected:
     bool receiveDetected();
     virtual bool canSendImmediately();
-    void completeSending();
+    void completeSending();*/
 
 };
