@@ -36,7 +36,7 @@ class RF433Interface : public RadioInterface, protected concurrency::NotifiedWor
 
     protected:
 
-    RH_ASK RF433Driver;
+    RH_ASK *RF433Driver;
     bool isReceiving = false;
     RadioBuffer radioBuffer __attribute__((__aligned__));
 

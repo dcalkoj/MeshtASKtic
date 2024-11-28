@@ -655,6 +655,7 @@ void setup()
     nodeDB = new NodeDB;
 
     // If we're taking on the repeater role, use flood router and turn off 3V3_S rail because peripherals are not needed
+
     if (config.device.role == meshtastic_Config_DeviceConfig_Role_REPEATER) {
         router = new FloodingRouter();
 #ifdef PIN_3V3_EN
@@ -955,6 +956,7 @@ void setup()
     }*/
    if ((!rIf) && (config.lora.region != meshtastic_Config_LoRaConfig_RegionCode_LORA_24)) {
         rIf = new RF433Interface();
+        //pinMode(34, OUTPUT);
         if (!rIf->init()) {
             LOG_WARN("Failed to init RF433 radio");
             delete rIf;

@@ -5,6 +5,7 @@
 
 #include "RH_ASK.h"
 #include "RHCRC.h"
+#include "configuration.h"
 
 #define RH_PLATFORM_RAK4630 46
 
@@ -75,7 +76,7 @@ RH_ASK::RH_ASK(uint16_t speed, uint8_t rxPin, uint8_t txPin, uint8_t pttPin, boo
     _txPin(txPin),
     _pttPin(pttPin),
     _rxInverted(false),
-    _pttInverted(pttInverted), concurrency::OSThread("RH_ASKThread")
+    _pttInverted(pttInverted)//, concurrency::OSThread("RH_ASKThread")
 {
     // Initialise the first 8 nibbles of the tx buffer to be the standard
     // preamble. We will append messages after that. 0x38, 0x2c is the start symbol before
@@ -136,7 +137,7 @@ void RH_ASK::timerSetup()
 
         // Enable IRQ in the NVIC
         NVIC_SetPriority(TIMER3_IRQn, 3);
-        //NVIC_EnableIRQ(TIMER3_IRQn); // what to do...
+        NVIC_EnableIRQ(TIMER3_IRQn); // what to do...
 
         // Start Timer
         NRF_TIMER3->TASKS_START = 1;
@@ -296,6 +297,7 @@ bool RH_INTERRUPT_ATTR RH_ASK::readRx()
 
 // Write the TX output pin, taking into account platform type.
 void RH_INTERRUPT_ATTR RH_ASK::writeTx(bool value)
+//void RH_ASK::writeTx(bool value)
 {
     digitalWrite(_txPin, value);
 }
@@ -312,7 +314,7 @@ uint8_t RH_ASK::maxMessageLength()
 }
 
 #if (RH_PLATFORM == RH_PLATFORM_RAK4630)
-/*extern "C" void TIMER3_IRQHandler(void) 
+extern "C" void TIMER3_IRQHandler(void) 
 {
     // Check if the timer compare event occurred
     if (NRF_TIMER3->EVENTS_COMPARE[0])
@@ -324,19 +326,19 @@ uint8_t RH_ASK::maxMessageLength()
         // Call the interrupt handling function in the driver
         thisASKDriver->handleTimerInterrupt();
     }
-}*/
+}
 
-int32_t RH_ASK::runOnce(){
-    if (NRF_TIMER3->EVENTS_COMPARE[0]){
+/*int32_t RH_ASK::runOnce(){
+    //if (NRF_TIMER3->EVENTS_COMPARE[0]){ //remove timer?
         // Clear the event
-        NRF_TIMER3->EVENTS_COMPARE[0] = 0;
-        NRF_TIMER3->TASKS_CLEAR = 1;
+        //NRF_TIMER3->EVENTS_COMPARE[0] = 0;
+        //NRF_TIMER3->TASKS_CLEAR = 1;
 
         // Call the interrupt handling function in the driver
         thisASKDriver->handleTimerInterrupt(); //not actually an interrupt
-    }
+    //}
     return 1;
-}
+}*/
 
 #elif (RH_PLATFORM == RH_PLATFORM_ESP32)
 void IRAM_ATTR esp32_timer_interrupt_handler()
@@ -484,7 +486,9 @@ void RH_INTERRUPT_ATTR RH_ASK::receiveTimer()
 }
 
 void RH_INTERRUPT_ATTR RH_ASK::transmitTimer()
+//void RH_ASK::transmitTimer() //set a breakpoint and continue 8 times?
 {
+    //LOG_DEBUG("sample: %d index %d", _txSample, _txIndex);
     if (_txSample++ == 0)
     {
 	// Send next bit
@@ -511,7 +515,8 @@ void RH_INTERRUPT_ATTR RH_ASK::transmitTimer()
 	_txSample = 0;
 }
 
-void RH_INTERRUPT_ATTR RH_ASK::handleTimerInterrupt()
+void RH_INTERRUPT_ATTR RH_ASK::handleTimerInterrupt() //decorator ? for an interrupt...
+//void RH_ASK::handleTimerInterrupt() 
 {
     if (_mode == RHModeRx)
 	receiveTimer(); // Receiving

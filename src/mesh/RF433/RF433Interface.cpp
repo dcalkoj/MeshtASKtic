@@ -8,14 +8,14 @@
 #include "Throttle.h"
 
 #define RATE 2000
-#define WB_IO1 34
-#define WB_IO2 17
+#define WB_IO1 17
+#define WB_IO2 34
 
 //ACT I. Transmit  (Reference: RadioInterface)
 
 RF433Interface::RF433Interface() : NotifiedWorkerThread("RF433_ASK_Thread"){
     instance = this;
-    RH_ASK RF433Driver(RATE,WB_IO1,WB_IO2);
+    RF433Driver = new RH_ASK(RATE,WB_IO1,WB_IO2);
 }
 
 RF433Interface *RF433Interface::instance;
@@ -32,7 +32,7 @@ bool RF433Interface::canSleep(){
 bool RF433Interface::sleep(){
     LOG_DEBUG("RF433 entering sleep");
     if(canSleep()){
-        RF433Driver.setModeIdle();
+        RF433Driver->setModeIdle();
     }
     return true;
 }
@@ -44,11 +44,13 @@ ErrorCode RF433Interface::send(meshtastic_MeshPacket *p){
 
      if (numbytes > RH_ASK_MAX_MESSAGE_LEN){
         LOG_DEBUG("PACKET TOO BIG! Discarding.");
+        sendingPacket=NULL;
         packetPool.release(p);
         return ERRNO_UNKNOWN;
     }
 
-    RF433Driver.send((uint8_t *)&radioBuffer, numbytes);
+    RF433Driver->send((uint8_t *) &radioBuffer, numbytes);
+    RF433Driver->waitPacketSent();
 
     sendingPacket=NULL;
     packetPool.release(p);
@@ -91,11 +93,12 @@ bool RF433Interface::cancelSending(NodeNum from, PacketId id){
 }
 
 bool RF433Interface::init(){
-    if(!RF433Driver.init()){
+    if(!RF433Driver->init()){
         LOG_DEBUG("RH_ASK_INIT FAILED!");
         return false;
     }
 pinMode(WB_IO2, OUTPUT);
+digitalWrite(WB_IO2, LOW);
 return true;
 }
 

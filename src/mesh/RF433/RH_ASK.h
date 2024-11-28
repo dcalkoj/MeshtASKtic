@@ -269,7 +269,7 @@
 /// RH_ASK driver(2000, PA3, PA4);
 /// \endcode
 /// and connect the serial to pins PA3 and PA4
-class RH_ASK : public RHGenericDriver, private concurrency::OSThread
+class RH_ASK : public RHGenericDriver//, private concurrency::OSThread
 {
 public:
     /// Constructor.
@@ -372,7 +372,7 @@ protected:
     /// since it is slow
     void            validateRxBuf();
 
-    int32_t runOnce() override;
+    //int32_t runOnce() override;
 
     /// Configure bit rate in bits per second
     uint16_t        _speed;
