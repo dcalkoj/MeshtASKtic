@@ -385,13 +385,12 @@ void RadioLibInterface::handleReceiveInterrupt()
     xmitMsec = getPacketTime(length);
 
 #ifndef DISABLE_WELCOME_UNSET
-    config.lora.region = meshtastic_Config_LoRaConfig_RegionCode::meshtastic_Config_LoRaConfig_RegionCode_US;
-    /*if (config.lora.region == meshtastic_Config_LoRaConfig_RegionCode_UNSET) {
+    if (config.lora.region == meshtastic_Config_LoRaConfig_RegionCode_UNSET) {
         
         LOG_WARN("recv - lora rx disabled because RegionCode_Unset");
         airTime->logAirtime(RX_ALL_LOG, xmitMsec);
         return;
-    }*/
+    }
 #endif
 
     int state = iface->readData((uint8_t *)&radioBuffer, length);

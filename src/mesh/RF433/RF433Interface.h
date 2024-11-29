@@ -8,7 +8,7 @@
 #include "MeshPacketQueue.h"
 #include "concurrency/NotifiedWorkerThread.h"
 
-class RF433Interface : public RadioInterface, protected concurrency::NotifiedWorkerThread
+class RF433Interface : public RadioInterface, private concurrency::OSThread
 {
     public:
     
@@ -49,7 +49,8 @@ class RF433Interface : public RadioInterface, protected concurrency::NotifiedWor
     static RF433Interface *instance;
 
     private:
-    virtual void onNotify(uint32_t notification) override;
+    //virtual void onNotify(uint32_t notification) override;
+    int32_t runOnce() override;
 
     //ACT II. RadioLibInterface
     /*public:

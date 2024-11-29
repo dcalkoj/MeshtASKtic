@@ -486,7 +486,6 @@ void RH_INTERRUPT_ATTR RH_ASK::receiveTimer()
 }
 
 void RH_INTERRUPT_ATTR RH_ASK::transmitTimer()
-//void RH_ASK::transmitTimer() //set a breakpoint and continue 8 times?
 {
     //LOG_DEBUG("sample: %d index %d", _txSample, _txIndex);
     if (_txSample++ == 0)
@@ -497,7 +496,8 @@ void RH_INTERRUPT_ATTR RH_ASK::transmitTimer()
 	// since the last bit)
 	if (_txIndex >= _txBufLen)
 	{
-	    setModeIdle();
+	    //setModeIdle();
+        setModeRx();
 	    _txGood++;
 	}
 	else
@@ -516,7 +516,6 @@ void RH_INTERRUPT_ATTR RH_ASK::transmitTimer()
 }
 
 void RH_INTERRUPT_ATTR RH_ASK::handleTimerInterrupt() //decorator ? for an interrupt...
-//void RH_ASK::handleTimerInterrupt() 
 {
     if (_mode == RHModeRx)
 	receiveTimer(); // Receiving

@@ -13,7 +13,8 @@
 
 //ACT I. Transmit  (Reference: RadioInterface)
 
-RF433Interface::RF433Interface() : NotifiedWorkerThread("RF433_ASK_Thread"){
+RF433Interface::RF433Interface() : concurrency::OSThread("RH_ASKThread")
+{
     instance = this;
     RF433Driver = new RH_ASK(RATE,WB_IO1,WB_IO2);
 }
@@ -59,8 +60,6 @@ ErrorCode RF433Interface::send(meshtastic_MeshPacket *p){
 
     //ErrorCode res = txQueue.enqueue(p) ? ERRNO_OK : ERRNO_UNKNOWN;
     
-    
-    
     /* Real Code from RadioLib Interface
     printPacket("enqueuing for send", p);
 
@@ -81,6 +80,27 @@ ErrorCode RF433Interface::send(meshtastic_MeshPacket *p){
     */
 }
 
+int32_t RF433Interface::runOnce(){
+
+    uint8_t buf[RH_ASK_MAX_MESSAGE_LEN];
+    uint8_t buflen = sizeof(buf);
+
+    if (RF433Driver->recv(buf, &buflen)) // Non-blocking
+    {
+        int i;
+        // Message with a good checksum received, dump it.  
+        RF433Driver->printBuffer("Got:", buf, buflen);
+        for(auto i=0; i < buflen; ++i){
+          Serial.print(buf[i], BIN);
+        }
+        Serial.println("Recv!");
+
+    }
+    //LOG_DEBUG("ran recv");
+    return 10;
+}
+
+
 
 bool RF433Interface::cancelSending(NodeNum from, PacketId id){
     auto p = txQueue.remove(from, id);
@@ -98,7 +118,9 @@ bool RF433Interface::init(){
         return false;
     }
 pinMode(WB_IO2, OUTPUT);
+pinMode(WB_IO1, INPUT);
 digitalWrite(WB_IO2, LOW);
+digitalWrite(WB_IO1, LOW);
 return true;
 }
 
@@ -110,10 +132,10 @@ void RF433Interface::saveFreq(float savedFreq){
     savedFreq = 433; //duhhh!
 }
 
-void RF433Interface::onNotify(uint32_t notification){
+/*void RF433Interface::onNotify(uint32_t notification){
 
     LOG_DEBUG("I got notified :)\n");
-}
+}*/
 
 //Act II. Recieve (Reference: RadioLibInterface)
 
@@ -255,99 +277,99 @@ void RF433Interface::onNotify(uint32_t notification){
 //     }
 // }
 
-// /** start an immediate transmit
-//  *  This method is  so subclasses can hook as needed, subclasses should not call directly
-//  */
-// //Meaty
-// void RF433Interface::startSend(meshtastic_MeshPacket *txp){
-//     printPacket("Starting low level send", txp);
-//     if (txp->to == NODENUM_BROADCAST_NO_LORA) {
-//         LOG_DEBUG("Drop Tx packet because dest is broadcast no-lora");
-//         packetPool.release(txp);
-//     } else if (disabled || !config.lora.tx_enabled) {
-//         LOG_WARN("Drop Tx packet because LoRa Tx disabled");
-//         packetPool.release(txp);
-//     } else {
-//         powerMon->setState(meshtastic_PowerMon_State_Lora_TXOn);
+/** start an immediate transmit
+ *  This method is  so subclasses can hook as needed, subclasses should not call directly
+ */
+//Meaty
+/*void RF433Interface::startSend(meshtastic_MeshPacket *txp){
+    printPacket("Starting low level send", txp);
+    if (txp->to == NODENUM_BROADCAST_NO_LORA) {
+        LOG_DEBUG("Drop Tx packet because dest is broadcast no-lora");
+        packetPool.release(txp);
+    } else if (disabled || !config.lora.tx_enabled) {
+        LOG_WARN("Drop Tx packet because LoRa Tx disabled");
+        packetPool.release(txp);
+    } else {
+        powerMon->setState(meshtastic_PowerMon_State_Lora_TXOn);
 
-//         size_t numbytes = beginSending(txp);
+        size_t numbytes = beginSending(txp);
 
-//         const char *msg = "Hello World!";
+        const char *msg = "Hello World!";
 
-//         auto res = RF433Driver.send((uint8_t *)msg, strlen(msg));
-//         RF433Driver.waitPacketSent();
+        auto res = RF433Driver.send((uint8_t *)msg, strlen(msg));
+        RF433Driver.waitPacketSent();
 
-//         //int res = iface->startTransmit((uint8_t *)&radioBuffer, numbytes);
-//         if (res != RADIOLIB_ERR_NONE) {
-//             LOG_ERROR("startTransmit failed, error=%d", res);
-//             RECORD_CRITICALERROR(meshtastic_CriticalErrorCode_RADIO_SPI_BUG);
+        //int res = iface->startTransmit((uint8_t *)&radioBuffer, numbytes);
+        if (res != RADIOLIB_ERR_NONE) {
+            LOG_ERROR("startTransmit failed, error=%d", res);
+            RECORD_CRITICALERROR(meshtastic_CriticalErrorCode_RADIO_SPI_BUG);
 
-//             // This send failed, but make sure to 'complete' it properly
-//             completeSending();
-//             powerMon->clearState(meshtastic_PowerMon_State_Lora_TXOn); // Transmitter off now
-//             startReceive(); // Restart receive mode (because startTransmit failed to put us in xmit mode)
-//         }
+            // This send failed, but make sure to 'complete' it properly
+            completeSending();
+            powerMon->clearState(meshtastic_PowerMon_State_Lora_TXOn); // Transmitter off now
+            startReceive(); // Restart receive mode (because startTransmit failed to put us in xmit mode)
+        }
 
-//         // Must be done AFTER, starting transmit, because startTransmit clears (possibly stale) interrupt pending register
-//         // bits
-//         //enableInterrupt(isrTxLevel0);
-//     }
+        // Must be done AFTER, starting transmit, because startTransmit clears (possibly stale) interrupt pending register
+        // bits
+        //enableInterrupt(isrTxLevel0);
+    }*/
 
 
-// meshtastic_QueueStatus RF433Interface::getQueueStatus(){
-//     meshtastic_QueueStatus qs;
+/*meshtastic_QueueStatus RF433Interface::getQueueStatus(){
+    meshtastic_QueueStatus qs;
 
-//     qs.res = qs.mesh_packet_id = 0;
-//     qs.free = txQueue.getFree();
-//     qs.maxlen = txQueue.getMaxLen();
+    qs.res = qs.mesh_packet_id = 0;
+    qs.free = txQueue.getFree();
+    qs.maxlen = txQueue.getMaxLen();
 
-//     return qs;
-// }
+    return qs;
+}*/
 
 // //Meaty
 // bool RF433Interface::receiveDetected(){
 //     return isChannelActive();
 // }
 
-// //Meaty
-// bool RF433Interface::canSendImmediately(){
-//     bool busyTx = sendingPacket != NULL;
-//     bool busyRx = isReceiving && isActivelyReceiving();
-//      if (busyTx || busyRx) {
-//         if (busyTx) {
-//             LOG_WARN("Can not send yet, busyTx");
-//         }
-//         // If we've been trying to send the same packet more than one minute and we haven't gotten a
-//         // TX IRQ from the radio, the radio is probably broken.
-//         if (busyTx && !Throttle::isWithinTimespanMs(lastTxStart, 60000)) {
-//             LOG_ERROR("Hardware Failure! busyTx for more than 60s");
-//             RECORD_CRITICALERROR(meshtastic_CriticalErrorCode_TRANSMIT_FAILED);
-//             // reboot in 5 seconds when this condition occurs.
-//             rebootAtMsec = lastTxStart + 65000;
-//         }
-//         if (busyRx) {
-//             LOG_WARN("Can not send yet, busyRx");
-//         }
-//         return false;
-//     } else
-//         return true;
+/*
+bool RF433Interface::canSendImmediately(){
+    bool busyTx = sendingPacket != NULL;
+    bool busyRx = isReceiving && isActivelyReceiving();
+     if (busyTx || busyRx) {
+        if (busyTx) {
+            LOG_WARN("Can not send yet, busyTx");
+        }
+        // If we've been trying to send the same packet more than one minute and we haven't gotten a
+        // TX IRQ from the radio, the radio is probably broken.
+        if (busyTx && !Throttle::isWithinTimespanMs(lastTxStart, 60000)) {
+            LOG_ERROR("Hardware Failure! busyTx for more than 60s");
+            RECORD_CRITICALERROR(meshtastic_CriticalErrorCode_TRANSMIT_FAILED);
+            // reboot in 5 seconds when this condition occurs.
+            rebootAtMsec = lastTxStart + 65000;
+        }
+        if (busyRx) {
+            LOG_WARN("Can not send yet, busyRx");
+        }
+        return false;
+    } else
+        return true;
 
-// }
+}*/
 
-// void RF433Interface::completeSending(){
-// // We are careful to clear sending packet before calling printPacket because
-//     // that can take a long time
-//     auto p = sendingPacket;
-//     sendingPacket = NULL;
+/*void RF433Interface::completeSending(){
+// We are careful to clear sending packet before calling printPacket because
+    // that can take a long time
+    auto p = sendingPacket;
+    sendingPacket = NULL;
 
-//     if (p) {
-//         txGood++;
-//         if (!isFromUs(p))
-//             txRelay++;
-//         printPacket("Completed sending", p);
+    if (p) {
+        txGood++;
+        if (!isFromUs(p))
+            txRelay++;
+        printPacket("Completed sending", p);
 
-//         // We are done sending that packet, release it
-//         packetPool.release(p);
-//         // LOG_DEBUG("Done with send");
-//     }
-// }
+        // We are done sending that packet, release it
+        packetPool.release(p);
+        // LOG_DEBUG("Done with send");
+    }
+}*/
