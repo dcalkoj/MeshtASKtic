@@ -108,7 +108,8 @@ bool RH_ASK::init()
 #endif
 
     // Ready to go
-    setModeIdle();
+    //setModeIdle();
+    setModeRx();
     timerSetup();
 
     return true;

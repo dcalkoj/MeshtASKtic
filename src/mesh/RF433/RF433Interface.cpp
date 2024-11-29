@@ -83,17 +83,40 @@ ErrorCode RF433Interface::send(meshtastic_MeshPacket *p){
 int32_t RF433Interface::runOnce(){
 
     uint8_t buf[RH_ASK_MAX_MESSAGE_LEN];
-    uint8_t buflen = sizeof(buf);
+    uint8_t buflen = sizeof(buf); //sizeof((uint8_t *)&radioBuffer);
 
-    if (RF433Driver->recv(buf, &buflen)) // Non-blocking
+    if (RF433Driver->recv((uint8_t *)&radioBuffer, &buflen)) // Non-blocking
     {
         int i;
         // Message with a good checksum received, dump it.  
-        RF433Driver->printBuffer("Got:", buf, buflen);
-        for(auto i=0; i < buflen; ++i){
-          Serial.print(buf[i], BIN);
-        }
-        Serial.println("Recv!");
+        RF433Driver->printBuffer("Got:", (uint8_t *)&radioBuffer, buflen);
+
+        int32_t payloadLen = buflen - sizeof(PacketHeader);
+
+            meshtastic_MeshPacket *mp = packetPool.allocZeroed();
+
+            mp->from = radioBuffer.header.from;
+            mp->to = radioBuffer.header.to;
+            mp->id = radioBuffer.header.id;
+            mp->channel = radioBuffer.header.channel;
+            assert(HOP_MAX <= PACKET_FLAGS_HOP_LIMIT_MASK); // If hopmax changes, carefully check this code
+            mp->hop_limit = radioBuffer.header.flags & PACKET_FLAGS_HOP_LIMIT_MASK;
+            mp->hop_start = (radioBuffer.header.flags & PACKET_FLAGS_HOP_START_MASK) >> PACKET_FLAGS_HOP_START_SHIFT;
+            mp->want_ack = !!(radioBuffer.header.flags & PACKET_FLAGS_WANT_ACK_MASK);
+            mp->via_mqtt = !!(radioBuffer.header.flags & PACKET_FLAGS_VIA_MQTT_MASK);
+
+            mp->rx_snr = 433.433;
+            mp->rx_rssi = 433;
+
+            mp->which_payload_variant =
+                meshtastic_MeshPacket_encrypted_tag; // Mark that the payload is still encrypted at this point
+            assert(((uint32_t)payloadLen) <= sizeof(mp->encrypted.bytes));
+            memcpy(mp->encrypted.bytes, radioBuffer.payload, payloadLen);
+            mp->encrypted.size = payloadLen;
+
+            printPacket("RF433 RX", mp);
+
+            deliverToReceiver(mp);
 
     }
     //LOG_DEBUG("ran recv");

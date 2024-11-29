@@ -38,7 +38,7 @@ class RF433Interface : public RadioInterface, private concurrency::OSThread
 
     RH_ASK *RF433Driver;
     bool isReceiving = false;
-    RadioBuffer radioBuffer __attribute__((__aligned__));
+    //RadioBuffer radioBuffer __attribute__((__aligned__));
 
 
     virtual void saveFreq(float savedFreq) override;
