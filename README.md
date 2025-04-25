@@ -12,6 +12,8 @@ Class project for the University of Michigan's EECS 507 - Introduction to Embedd
 
 Focused on expanding Meshtastic to support other transmission mediums, with the goal of providing an easy framework for building quick mesh networks off of existing routing and RTOS code.
 
+[Demo product!](https://github.com/dcalkoj/dcalkoj.github.io/blob/main/images/Mesh.jpg?raw=true)
+
 ## Project Details
 
 Project scope begins with replacing Meshtastic's router to deal with interfaces for simple 433MHz Amplitude Shift Keying devices. This particular build tested on the NRF52 chipset, particularly in the RAK4631 boards. To make this possible, the following was done:
